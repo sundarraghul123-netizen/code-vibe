@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { searchAPI } from '../services/api';
@@ -8,15 +8,18 @@ const Search = () => {
   const [results, setResults] = useState({ users: [], posts: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const latestSearch = useRef(0);
   const [recentSearches, setRecentSearches] = useState(() => {
     const saved = localStorage.getItem('recentSearches');
     return saved ? JSON.parse(saved) : [];
   });
 
   const performSearch = useCallback(async (searchQuery) => {
+    const searchId = ++latestSearch.current;
     if (!searchQuery.trim()) {
       setResults({ users: [], posts: [] });
       setError('');
+      setLoading(false);
       return;
     }
 
@@ -32,16 +35,19 @@ const Search = () => {
         throw usersRes.reason;
       }
 
+      if (searchId !== latestSearch.current) return;
+
       setResults({
         users: usersRes.status === 'fulfilled' ? usersRes.value.data.users : [],
         posts: postsRes.status === 'fulfilled' ? postsRes.value.data.posts : [],
       });
     } catch (error) {
+      if (searchId !== latestSearch.current) return;
       console.error('Error searching:', error);
       setResults({ users: [], posts: [] });
       setError('Search is temporarily unavailable. Please try again.');
     } finally {
-      setLoading(false);
+      if (searchId === latestSearch.current) setLoading(false);
     }
   }, []);
 

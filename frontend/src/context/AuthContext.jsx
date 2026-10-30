@@ -3,6 +3,16 @@ import { authAPI } from '../services/api';
 
 const AuthContext = createContext();
 
+const getStoredUser = () => {
+  try {
+    const storedUser = localStorage.getItem('user');
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch {
+    localStorage.removeItem('user');
+    return null;
+  }
+};
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -12,17 +22,12 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(getStoredUser);
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('token')));
   const [error, setError] = useState(null);
 
   useEffect(() => {
     checkAuth();
-    // Set a timeout to ensure loading state is cleared even if checkAuth hangs
-    const timeout = setTimeout(() => {
-      setLoading(false);
-    }, 2000);
-    return () => clearTimeout(timeout);
   }, []);
 
   const checkAuth = async () => {
@@ -44,6 +49,8 @@ export const AuthProvider = ({ children }) => {
             // Keep user logged in for network errors, will retry next time
           }
         }
+      } else {
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check error:', error);
