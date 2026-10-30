@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { chatAPI } from '../services/api';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { chatAPI, userAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { useMessages } from '../context/MessageContext';
@@ -11,16 +11,24 @@ const Messages = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [followers, setFollowers] = useState([]);
+  const [followerSearch, setFollowerSearch] = useState('');
+  const [followerLoading, setFollowerLoading] = useState(false);
+  const [followerError, setFollowerError] = useState('');
+  const [startingConversation, setStartingConversation] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const messagesEndRef = useRef(null);
+  const navigate = useNavigate();
   const { socket, onlineUsers, joinConversation, leaveConversation } = useSocket();
   const { user } = useAuth();
   const { markConversationAsRead } = useMessages();
 
   useEffect(() => {
+    if (!user?.id) return;
     fetchConversations();
-  }, []);
+    fetchFollowers();
+  }, [user?.id]);
 
   useEffect(() => {
     if (conversationId) {
@@ -59,6 +67,67 @@ const Messages = () => {
       console.error('Error fetching conversations:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFollowers = async () => {
+    if (!user?.id) return;
+
+    try {
+      setFollowerLoading(true);
+      setFollowerError('');
+      const response = await userAPI.getFollowers(user.id);
+      setFollowers(response.data.followers || []);
+    } catch (error) {
+      console.error('Error fetching followers:', error);
+      setFollowerError('Followers could not be loaded. Try again later.');
+    } finally {
+      setFollowerLoading(false);
+    }
+  };
+
+  const normalizedSearch = followerSearch.trim().toLowerCase();
+  const filteredConversations = useMemo(() => {
+    if (!normalizedSearch) return conversations;
+    return conversations.filter(({ otherUser }) =>
+      [otherUser?.username, otherUser?.name]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(normalizedSearch))
+    );
+  }, [conversations, normalizedSearch]);
+
+  const matchingFollowers = useMemo(() => {
+    if (!normalizedSearch) return [];
+    const conversationUserIds = new Set(conversations.map((conv) => conv.otherUser?._id));
+
+    return followers
+      .filter((follower) => !conversationUserIds.has(follower._id))
+      .filter((follower) =>
+        [follower.username, follower.name]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(normalizedSearch))
+      )
+      .slice(0, 8);
+  }, [conversations, followers, normalizedSearch]);
+
+  const handleStartConversation = async (follower) => {
+    if (startingConversation) return;
+
+    try {
+      setStartingConversation(follower._id);
+      const response = await chatAPI.createConversation(follower._id);
+      const conversation = response.data.conversation;
+      setConversations((previous) => [
+        conversation,
+        ...previous.filter((item) => item._id !== conversation._id),
+      ]);
+      setFollowerSearch('');
+      navigate(`/messages/${conversation._id}`);
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      setFollowerError('Unable to start this conversation. Please try again.');
+    } finally {
+      setStartingConversation('');
     }
   };
 
@@ -149,9 +218,61 @@ const Messages = () => {
       <div className="w-80 border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h1 className="text-xl font-semibold">Messages</h1>
+          <div className="relative mt-3">
+            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-4-4" />
+            </svg>
+            <input
+              type="search"
+              value={followerSearch}
+              onChange={(event) => setFollowerSearch(event.target.value)}
+              placeholder="Search followers..."
+              aria-label="Search followers"
+              className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary-500 dark:border-gray-700 dark:bg-gray-900"
+            />
+          </div>
         </div>
         <div className="divide-y divide-gray-200 dark:divide-gray-700">
-          {conversations.map((conv) => (
+          {normalizedSearch && matchingFollowers.length > 0 && (
+            <div className="bg-gray-50 px-4 py-3 dark:bg-gray-900">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Followers</p>
+              <div className="space-y-2">
+                {matchingFollowers.map((follower) => (
+                  <button
+                    key={follower._id}
+                    type="button"
+                    onClick={() => handleStartConversation(follower)}
+                    disabled={Boolean(startingConversation)}
+                    className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-white disabled:cursor-wait disabled:opacity-60 dark:hover:bg-gray-800"
+                  >
+                    <img
+                      src={follower.profilePicture}
+                      alt={follower.username}
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{follower.username}</span>
+                      {follower.name && <span className="block truncate text-xs text-gray-500">{follower.name}</span>}
+                    </span>
+                    <span className="text-xs font-medium text-primary-600">
+                      {startingConversation === follower._id ? 'Opening…' : 'Message'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {followerError && normalizedSearch && (
+            <p className="px-4 py-3 text-sm text-red-500">{followerError}</p>
+          )}
+
+          {normalizedSearch && !followerLoading && !followerError && filteredConversations.length === 0 && matchingFollowers.length === 0 && (
+            <p className="px-4 py-8 text-center text-sm text-gray-500">No followers or conversations found.</p>
+          )}
+
+          {filteredConversations.map((conv) => (
             <Link
               key={conv._id}
               to={`/messages/${conv._id}`}
