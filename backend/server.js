@@ -32,18 +32,14 @@ const { initializeSocket } = require('./sockets/socket');
 const app = express();
 const server = http.createServer(app);
 
+// Render and other reverse proxies forward the original client address.
+app.set('trust proxy', 1);
+
 // Initialize Socket.io
 initializeSocket(server);
 
 // Security middleware
 app.use(helmet());
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
 
 // CORS - Allow local development and the configured production frontend.
 const allowedOrigins = [
@@ -60,6 +56,18 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Rate limiting
+// Do not count browser CORS preflight requests. They are required before many
+// authenticated API calls and should not consume a user's request allowance.
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS'
+});
+app.use(limiter);
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
