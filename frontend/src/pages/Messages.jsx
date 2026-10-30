@@ -136,6 +136,12 @@ const Messages = () => {
       setMessages([]);
       const response = await chatAPI.getMessages(id);
       setMessages(response.data.messages);
+      // The API marks messages as seen. Keep the sidebar badge in sync too.
+      setConversations((previous) => previous.map((conversation) => (
+        conversation._id === id
+          ? { ...conversation, unreadCount: 0 }
+          : conversation
+      )));
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
