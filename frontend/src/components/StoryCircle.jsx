@@ -31,7 +31,7 @@ const StoryCircle = ({ user, stories, hasUnviewed, isAddStory }) => {
       <div className={`p-[2px] rounded-full ${ringColor}`}>
         <div className="p-[2px] bg-white dark:bg-gray-800 rounded-full">
           <img
-            src={imageError ? '/default-avatar.png' : user.profilePicture}
+            src={imageError ? '/default-avatar.svg' : (user.profilePicture || '/default-avatar.svg')}
             alt={user.username}
             onError={() => setImageError(true)}
             className="w-14 h-14 rounded-full object-cover"
