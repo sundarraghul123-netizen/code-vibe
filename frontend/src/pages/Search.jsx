@@ -7,6 +7,7 @@ const Search = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState({ users: [], posts: [] });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [recentSearches, setRecentSearches] = useState(() => {
     const saved = localStorage.getItem('recentSearches');
     return saved ? JSON.parse(saved) : [];
@@ -15,21 +16,30 @@ const Search = () => {
   const performSearch = useCallback(async (searchQuery) => {
     if (!searchQuery.trim()) {
       setResults({ users: [], posts: [] });
+      setError('');
       return;
     }
 
     try {
       setLoading(true);
-      const [usersRes, postsRes] = await Promise.all([
+      setError('');
+      const [usersRes, postsRes] = await Promise.allSettled([
         searchAPI.searchUsers(searchQuery),
         searchAPI.searchPosts(searchQuery),
       ]);
+
+      if (usersRes.status === 'rejected' && postsRes.status === 'rejected') {
+        throw usersRes.reason;
+      }
+
       setResults({
-        users: usersRes.data.users,
-        posts: postsRes.data.posts,
+        users: usersRes.status === 'fulfilled' ? usersRes.value.data.users : [],
+        posts: postsRes.status === 'fulfilled' ? postsRes.value.data.posts : [],
       });
     } catch (error) {
       console.error('Error searching:', error);
+      setResults({ users: [], posts: [] });
+      setError('Search is temporarily unavailable. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -44,7 +54,7 @@ const Search = () => {
   }, [query, performSearch]);
 
   const addToRecentSearches = (item) => {
-    const newSearches = [item, ...recentSearches.filter((s) => s.id !== item.id)].slice(0, 10);
+    const newSearches = [item, ...recentSearches.filter((s) => s._id !== item._id)].slice(0, 10);
     setRecentSearches(newSearches);
     localStorage.setItem('recentSearches', JSON.stringify(newSearches));
   };
@@ -134,6 +144,12 @@ const Search = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto"></div>
             </div>
           )}
+
+          {!loading && !error && results.users.length === 0 && results.posts.length === 0 && (
+            <p className="text-center text-gray-500 py-8">No accounts or posts found.</p>
+          )}
+
+          {error && <p className="text-center text-red-500 py-8">{error}</p>}
         </div>
       ) : (
         /* Recent Searches */

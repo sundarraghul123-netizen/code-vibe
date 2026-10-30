@@ -1,16 +1,27 @@
 const { User, Post, Reel } = require('../models');
 
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const getSearchQuery = (value) => {
+  const query = String(value || '').trim().slice(0, 100);
+  return {
+    raw: query,
+    regex: escapeRegex(query),
+    hashtag: query.replace(/^#/, '').toLowerCase()
+  };
+};
+
 // @desc    Search users by username
 // @route   GET /api/search/users
 // @access  Public
 exports.searchUsers = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { raw, regex } = getSearchQuery(req.query.q);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    if (!q) {
+    if (!raw) {
       return res.status(400).json({
         success: false,
         message: 'Search query is required'
@@ -19,9 +30,9 @@ exports.searchUsers = async (req, res) => {
 
     const users = await User.find({
       $or: [
-        { username: { $regex: q, $options: 'i' } },
-        { name: { $regex: q, $options: 'i' } },
-        { bio: { $regex: q, $options: 'i' } }
+        { username: { $regex: regex, $options: 'i' } },
+        { name: { $regex: regex, $options: 'i' } },
+        { bio: { $regex: regex, $options: 'i' } }
       ]
     })
       .select('username name profilePicture bio followers')
@@ -32,9 +43,9 @@ exports.searchUsers = async (req, res) => {
 
     const total = await User.countDocuments({
       $or: [
-        { username: { $regex: q, $options: 'i' } },
-        { name: { $regex: q, $options: 'i' } },
-        { bio: { $regex: q, $options: 'i' } }
+        { username: { $regex: regex, $options: 'i' } },
+        { name: { $regex: regex, $options: 'i' } },
+        { bio: { $regex: regex, $options: 'i' } }
       ]
     });
 
@@ -63,12 +74,12 @@ exports.searchUsers = async (req, res) => {
 // @access  Public
 exports.searchPosts = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { raw, regex, hashtag } = getSearchQuery(req.query.q);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 24;
     const skip = (page - 1) * limit;
 
-    if (!q) {
+    if (!raw) {
       return res.status(400).json({
         success: false,
         message: 'Search query is required'
@@ -76,8 +87,8 @@ exports.searchPosts = async (req, res) => {
     }
 
     // Check if searching by hashtag
-    const isHashtag = q.startsWith('#');
-    const searchTerm = isHashtag ? q.substring(1).toLowerCase() : q;
+    const isHashtag = raw.startsWith('#');
+    const searchTerm = isHashtag ? hashtag : regex;
 
     let query = {};
     if (isHashtag) {
@@ -85,7 +96,7 @@ exports.searchPosts = async (req, res) => {
     } else {
       query = {
         $or: [
-          { caption: { $regex: q, $options: 'i' } },
+          { caption: { $regex: regex, $options: 'i' } },
           { hashtags: searchTerm }
         ]
       };
@@ -123,12 +134,12 @@ exports.searchPosts = async (req, res) => {
 // @access  Public
 exports.searchReels = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { raw, regex, hashtag } = getSearchQuery(req.query.q);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 24;
     const skip = (page - 1) * limit;
 
-    if (!q) {
+    if (!raw) {
       return res.status(400).json({
         success: false,
         message: 'Search query is required'
@@ -136,8 +147,8 @@ exports.searchReels = async (req, res) => {
     }
 
     // Check if searching by hashtag
-    const isHashtag = q.startsWith('#');
-    const searchTerm = isHashtag ? q.substring(1).toLowerCase() : q;
+    const isHashtag = raw.startsWith('#');
+    const searchTerm = isHashtag ? hashtag : regex;
 
     let query = {};
     if (isHashtag) {
@@ -145,7 +156,7 @@ exports.searchReels = async (req, res) => {
     } else {
       query = {
         $or: [
-          { caption: { $regex: q, $options: 'i' } },
+          { caption: { $regex: regex, $options: 'i' } },
           { hashtags: searchTerm }
         ]
       };
