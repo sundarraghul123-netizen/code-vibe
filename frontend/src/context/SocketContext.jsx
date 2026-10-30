@@ -12,7 +12,12 @@ export const useSocket = () => {
   return context;
 };
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+// In production the socket server is the same origin as the API server.
+// Deriving this URL keeps local development working while preventing the
+// deployed build from trying to connect to the user's localhost.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL || API_URL.replace(/\/api\/?$/, '');
 
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
