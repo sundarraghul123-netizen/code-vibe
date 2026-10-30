@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { chatAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,9 @@ const Messages = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const messagesEndRef = useRef(null);
   const [lastSeen, setLastSeen] = useState({});
   const { socket, onlineUsers, joinConversation, leaveConversation, sendMessage } = useSocket();
   const { user } = useAuth();
@@ -32,16 +35,19 @@ const Messages = () => {
         leaveConversation(conversationId);
       };
     }
-  }, [conversationId, markConversationAsRead]);
+  }, [conversationId, socket, joinConversation, leaveConversation, markConversationAsRead]);
 
   useEffect(() => {
     if (socket) {
-      socket.on('receiveMessage', (message) => {
-        setMessages((prev) => [...prev, message]);
-      });
+      const handleReceiveMessage = (message) => {
+        setMessages((prev) => (
+          prev.some((item) => item._id === message._id) ? prev : [...prev, message]
+        ));
+      };
+      socket.on('receiveMessage', handleReceiveMessage);
 
       return () => {
-        socket.off('receiveMessage');
+        socket.off('receiveMessage', handleReceiveMessage);
       };
     }
   }, [socket]);
@@ -59,6 +65,7 @@ const Messages = () => {
 
   const fetchMessages = async (id) => {
     try {
+      setMessages([]);
       const response = await chatAPI.getMessages(id);
       setMessages(response.data.messages);
     } catch (error) {
@@ -85,34 +92,49 @@ const Messages = () => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !conversationId) return;
+    const text = newMessage.trim();
+    if (!text || !conversationId || sending) return;
 
     try {
+      setSending(true);
+      setSendError('');
       // Get receiver from conversations
       const conv = conversations.find(c => c._id === conversationId);
-      if (!conv) return;
+      if (!conv) throw new Error('Conversation is not ready yet');
 
       const response = await chatAPI.sendMessage({
         conversationId,
         receiverId: conv.otherUser.id,
-        message: newMessage
+        message: text
       });
 
       // Add message to list
-      setMessages((prev) => [...prev, response.data.message]);
+      setMessages((prev) => (
+        prev.some((item) => item._id === response.data.message._id)
+          ? prev
+          : [...prev, response.data.message]
+      ));
       
       // Update conversations via MessageContext
-      const updatedConversations = conversations.map(c => 
+      const updatedConversations = conversations.map(c =>
         c._id === conversationId 
           ? { ...c, lastMessage: response.data.message }
           : c
       );
+      setConversations(updatedConversations);
       
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
+      setSendError(error.response?.data?.message || 'Message could not be sent. Try again.');
+    } finally {
+      setSending(false);
     }
   };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   if (loading) {
     return (
@@ -131,9 +153,9 @@ const Messages = () => {
         </div>
         <div className="divide-y divide-gray-200 dark:divide-gray-700">
           {conversations.map((conv) => (
-            <a
+            <Link
               key={conv._id}
-              href={`/messages/${conv._id}`}
+              to={`/messages/${conv._id}`}
               className={`flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-800 ${
                 conversationId === conv._id ? 'bg-gray-50 dark:bg-gray-800' : ''
               }`}
@@ -168,7 +190,7 @@ const Messages = () => {
                   {conv.unreadCount}
                 </span>
               )}
-            </a>
+            </Link>
           ))}
         </div>
       </div>
@@ -229,6 +251,7 @@ const Messages = () => {
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
@@ -242,16 +265,19 @@ const Messages = () => {
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Message..."
+                  maxLength={2000}
+                  disabled={sending}
                   className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-full outline-none dark:bg-gray-800"
                 />
                 <button
                   type="submit"
-                  disabled={!newMessage.trim()}
+                  disabled={!newMessage.trim() || sending}
                   className="px-6 py-2 bg-primary-500 text-white rounded-full disabled:opacity-50"
                 >
-                  Send
+                  {sending ? 'Sending…' : 'Send'}
                 </button>
               </div>
+              {sendError && <p className="mt-2 text-sm text-red-500">{sendError}</p>}
             </form>
           </>
         ) : (

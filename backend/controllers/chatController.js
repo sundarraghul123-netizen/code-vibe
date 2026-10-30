@@ -1,5 +1,6 @@
 const { Conversation, Message, User } = require('../models');
 const { uploadToCloudinary, extractPublicId } = require('../utils/cloudinary');
+const { getIo } = require('../sockets/socket');
 
 // @desc    Get user's conversations
 // @route   GET /api/chat/conversations
@@ -230,6 +231,11 @@ exports.sendMessage = async (req, res) => {
     conversation.unreadCount.set(receiverId.toString(), currentUnread + 1);
     
     await conversation.save();
+
+    // Deliver the persisted message in real time. The client deduplicates by
+    // message id so it is safe whether the socket event or HTTP response wins.
+    getIo()?.to(conversationId).emit('receiveMessage', newMessage);
+    getIo()?.to(conversationId).emit('newMessage', newMessage);
 
     res.status(201).json({
       success: true,

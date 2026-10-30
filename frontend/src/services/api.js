@@ -13,8 +13,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    const isPublicSearch = config.url?.startsWith('/search/');
-    if (token && !isPublicSearch) {
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -137,6 +136,13 @@ export const chatAPI = {
   createConversation: (userId) => api.post('/chat/conversations', { userId }),
   getMessages: (conversationId, page = 1) => api.get(`/chat/messages/${conversationId}?page=${page}`),
   sendMessage: (data) => {
+    if (!data.media) {
+      return api.post('/chat/messages', {
+        conversationId: data.conversationId,
+        receiverId: data.receiverId,
+        message: data.message,
+      });
+    }
     const formData = new FormData();
     formData.append('conversationId', data.conversationId);
     formData.append('receiverId', data.receiverId);

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
@@ -60,17 +60,17 @@ export const SocketProvider = ({ children }) => {
     }
   }, [isAuthenticated, user]);
 
-  const joinConversation = (conversationId) => {
+  const joinConversation = useCallback((conversationId) => {
     if (socket) {
       socket.emit('joinConversation', conversationId);
     }
-  };
+  }, [socket]);
 
-  const leaveConversation = (conversationId) => {
+  const leaveConversation = useCallback((conversationId) => {
     if (socket) {
       socket.emit('leaveConversation', conversationId);
     }
-  };
+  }, [socket]);
 
   const sendMessage = (message) => {
     if (socket) {

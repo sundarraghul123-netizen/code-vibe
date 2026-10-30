@@ -48,7 +48,8 @@ export const MessageProvider = ({ children }) => {
       // Listen for new messages
       socket.on('newMessage', (message) => {
         // Only increment if message is from someone else
-        if (message.sender !== user.id) {
+        const senderId = typeof message.sender === 'object' ? message.sender._id : message.sender;
+        if (senderId !== user.id) {
           setUnreadCount((prev) => prev + 1);
           // Update conversations
           setConversations((prev) => {
@@ -84,7 +85,7 @@ export const MessageProvider = ({ children }) => {
     }
   }, [socket, user]);
 
-  const markConversationAsRead = (conversationId) => {
+  const markConversationAsRead = useCallback((conversationId) => {
     setConversations((prev) => {
       const conv = prev.find((c) => c._id === conversationId);
       if (conv) {
@@ -96,7 +97,7 @@ export const MessageProvider = ({ children }) => {
       }
       return prev;
     });
-  };
+  }, []);
 
   const value = {
     conversations,
