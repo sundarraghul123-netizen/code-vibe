@@ -14,8 +14,7 @@ const Messages = () => {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const messagesEndRef = useRef(null);
-  const [lastSeen, setLastSeen] = useState({});
-  const { socket, onlineUsers, joinConversation, leaveConversation, sendMessage } = useSocket();
+  const { socket, onlineUsers, joinConversation, leaveConversation } = useSocket();
   const { user } = useAuth();
   const { markConversationAsRead } = useMessages();
 
