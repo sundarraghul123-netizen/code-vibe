@@ -106,12 +106,29 @@ export const MessageProvider = ({ children }) => {
     });
   }, []);
 
+  const updateConversation = useCallback((conversationId, updates) => {
+    setConversations((previous) => previous.map((conversation) => (
+      conversation._id === conversationId
+        ? { ...conversation, ...updates }
+        : conversation
+    )));
+  }, []);
+
+  const upsertConversation = useCallback((conversation) => {
+    setConversations((previous) => [
+      conversation,
+      ...previous.filter((item) => item._id !== conversation._id),
+    ]);
+  }, []);
+
   const value = {
     conversations,
     unreadCount,
     loading,
     fetchConversations,
     markConversationAsRead,
+    updateConversation,
+    upsertConversation,
   };
 
   return <MessageContext.Provider value={value}>{children}</MessageContext.Provider>;

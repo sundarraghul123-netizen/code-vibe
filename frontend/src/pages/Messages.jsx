@@ -7,7 +7,6 @@ import { useMessages } from '../context/MessageContext';
 
 const Messages = () => {
   const { conversationId } = useParams();
-  const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -22,11 +21,15 @@ const Messages = () => {
   const navigate = useNavigate();
   const { socket, onlineUsers, joinConversation, leaveConversation } = useSocket();
   const { user } = useAuth();
-  const { markConversationAsRead } = useMessages();
+  const {
+    conversations,
+    markConversationAsRead,
+    updateConversation,
+    upsertConversation,
+  } = useMessages();
 
   useEffect(() => {
     if (!user?.id) return;
-    fetchConversations();
     fetchFollowers();
   }, [user?.id]);
 
@@ -59,17 +62,6 @@ const Messages = () => {
     }
   }, [socket]);
 
-  const fetchConversations = async () => {
-    try {
-      const response = await chatAPI.getConversations();
-      setConversations(response.data.conversations);
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchFollowers = async () => {
     if (!user?.id) return;
 
@@ -85,6 +77,10 @@ const Messages = () => {
       setFollowerLoading(false);
     }
   };
+
+  useEffect(() => {
+    setLoading(false);
+  }, [conversations]);
 
   const normalizedSearch = followerSearch.trim().toLowerCase();
   const filteredConversations = useMemo(() => {
@@ -117,10 +113,7 @@ const Messages = () => {
       setStartingConversation(follower._id);
       const response = await chatAPI.createConversation(follower._id);
       const conversation = response.data.conversation;
-      setConversations((previous) => [
-        conversation,
-        ...previous.filter((item) => item._id !== conversation._id),
-      ]);
+      upsertConversation(conversation);
       setFollowerSearch('');
       navigate(`/messages/${conversation._id}`);
     } catch (error) {
@@ -137,11 +130,7 @@ const Messages = () => {
       const response = await chatAPI.getMessages(id);
       setMessages(response.data.messages);
       // The API marks messages as seen. Keep the sidebar badge in sync too.
-      setConversations((previous) => previous.map((conversation) => (
-        conversation._id === id
-          ? { ...conversation, unreadCount: 0 }
-          : conversation
-      )));
+      updateConversation(id, { unreadCount: 0 });
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
@@ -190,12 +179,7 @@ const Messages = () => {
       ));
       
       // Update conversations via MessageContext
-      const updatedConversations = conversations.map(c =>
-        c._id === conversationId 
-          ? { ...c, lastMessage: response.data.message }
-          : c
-      );
-      setConversations(updatedConversations);
+      updateConversation(conversationId, { lastMessage: response.data.message });
       
       setNewMessage('');
     } catch (error) {
