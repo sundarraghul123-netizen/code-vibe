@@ -2,7 +2,6 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 const path = require('path');
 
@@ -56,18 +55,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
-// Rate limiting
-// Do not count browser CORS preflight requests. They are required before many
-// authenticated API calls and should not consume a user's request allowance.
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.method === 'OPTIONS'
-});
-app.use(limiter);
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
