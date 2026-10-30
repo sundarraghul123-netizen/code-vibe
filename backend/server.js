@@ -49,12 +49,22 @@ const allowedOrigins = [
   process.env.CLIENT_URL
 ].filter(Boolean);
 
-app.use(cors({
-  origin: allowedOrigins,
+const corsOptions = {
+  origin: (origin, callback) => {
+    const isRenderOrigin = origin && /^https:\/\/[^/]+\.onrender\.com$/.test(origin);
+    if (!origin || allowedOrigins.includes(origin) || isRenderOrigin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Origin is not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-}));
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
